@@ -5,11 +5,25 @@
  * @author Barak Shoshany (baraksh@gmail.com) (http://baraksh.com)
  * @version 2.0.0
  * @date 2021-08-14
- * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this library in published research, please cite it as follows:
- *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing", doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
+ * @copyright Copyright (c) 2021 Barak Shoshany. Licensed under the MIT license. If you use this
+ * library in published research, please cite it as follows:
+ *  - Barak Shoshany, "A C++17 Thread Pool for High-Performance Scientific Computing",
+ *    doi:10.5281/zenodo.4742687, arXiv:2105.00613 (May 2021)
  *
  * @brief A C++17 thread pool for high-performance scientific computing.
- * @details A modern C++17-compatible thread pool implementation, built from scratch with high-performance scientific computing in mind. The thread pool is implemented as a single lightweight and self-contained class, and does not have any dependencies other than the C++17 standard library, thus allowing a great degree of portability. In particular, this implementation does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the programmer precise low-level control over the details of the parallelization, which permits more robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up to 40 cores and 80 threads. Other features include automatic generation of futures and easy parallelization of loops. Two helper classes enable synchronizing printing to an output stream by different threads and measuring execution time for benchmarking purposes. Please visit the GitHub repository at https://github.com/bshoshany/thread-pool for documentation and updates, or to submit feature requests and bug reports.
+ *
+ * @details A modern C++17-compatible thread pool implementation, built from scratch with
+ * high-performance scientific computing in mind. The thread pool is implemented as a single
+ * lightweight and self-contained class, and does not have any dependencies other than the C++17
+ * standard library, thus allowing a great degree of portability. In particular, this implementation
+ * does not utilize OpenMP or any other high-level multithreading APIs, and thus gives the
+ * programmer precise low-level control over the details of the parallelization, which permits more
+ * robust optimizations. The thread pool was extensively tested on both AMD and Intel CPUs with up
+ * to 40 cores and 80 threads. Other features include automatic generation of futures and easy
+ * parallelization of loops. Two helper classes enable synchronizing printing to an output stream by
+ * different threads and measuring execution time for benchmarking purposes. Please visit the GitHub
+ * repository at https://github.com/bshoshany/thread-pool for documentation and updates, or to
+ * submit feature requests and bug reports.
  */
 
 #define THREAD_POOL_VERSION "v2.0.0 (2021-08-14)"
@@ -31,7 +45,10 @@
 //                                    Begin class thread_pool                                    //
 
 /**
- * @brief A C++17 thread pool class. The user submits tasks to be executed into a queue. Whenever a thread becomes available, it pops a task from the queue and executes it. Each task is automatically assigned a future, which can be used to wait for the task to finish executing and/or obtain its eventual return value.
+ * @brief A C++17 thread pool class. The user submits tasks to be executed into a queue. Whenever a
+ * thread becomes available, it pops a task from the queue and executes it. Each task is
+ * automatically assigned a future, which can be used to wait for the task to finish executing
+ * and/or obtain its eventual return value.
  */
 class thread_pool
 {
@@ -46,7 +63,10 @@ public:
     /**
      * @brief Construct a new thread pool.
      *
-     * @param _thread_count The number of threads to use. The default value is the total number of hardware threads available, as reported by the implementation. With a hyperthreaded CPU, this will be twice the number of CPU cores. If the argument is zero, the default value will be used instead.
+     * @param _thread_count The number of threads to use. The default value is the total number of
+     * hardware threads available, as reported by the implementation. With a hyperthreaded CPU, this
+     * will be twice the number of CPU cores. If the argument is zero, the default value will be
+     * used instead.
      */
     thread_pool(const ui32 &_thread_count = std::thread::hardware_concurrency())
         : thread_count(_thread_count ? _thread_count : std::thread::hardware_concurrency()), threads(new std::thread[_thread_count ? _thread_count : std::thread::hardware_concurrency()])
@@ -55,7 +75,9 @@ public:
     }
 
     /**
-     * @brief Destruct the thread pool. Waits for all tasks to complete, then destroys all threads. Note that if the variable paused is set to true, then any tasks still in the queue will never be executed.
+     * @brief Destruct the thread pool. Waits for all tasks to complete, then destroys all threads.
+     * Note that if the variable paused is set to true, then any tasks still in the queue will never
+     * be executed.
      */
     ~thread_pool()
     {
@@ -108,6 +130,30 @@ public:
     {
         return thread_count;
     }
+
+
+    void * get_thread_param( ui32 tidx ) const
+    {
+      if( tidx >= thread_count ) 
+        return nullptr;
+    
+      auto findIt = thread_params.find( threads[tidx].get_id() );
+
+      if( findIt == thread_params.end() )
+        return nullptr;
+
+      return findIt->second;
+    }
+
+
+    void set_thread_param( ui32 tidx, void * paramPtr )
+    {
+      if( tidx >= thread_count )
+        return;
+
+     thread_params[ threads[tidx].get_id() ] = paramPtr;
+    }
+
 
     /**
      * @brief Parallelize a loop by splitting it into blocks, submitting each block separately to the thread pool, and waiting for all blocks to finish executing. The user supplies a loop function, which will be called once per block and should iterate over the block's range.
@@ -174,13 +220,16 @@ public:
         tasks_total++;
         {
             const std::scoped_lock lock(queue_mutex);
-            tasks.push(std::function<void()>(task));
+            tasks.push(std::function<void( void * )>(task));
         }
     }
 
     /**
      * @brief Push a function with arguments, but no return value, into the task queue.
-     * @details The function is wrapped inside a lambda in order to hide the arguments, as the tasks in the queue must be of type std::function<void()>, so they cannot have any arguments or return value. If no arguments are provided, the other overload will be used, in order to avoid the (slight) overhead of using a lambda.
+     * @details The function is wrapped inside a lambda in order to hide the arguments, as the tasks
+     * in the queue must be of type std::function<void()>, so they cannot have any arguments or
+     * return value. If no arguments are provided, the other overload will be used, in order to
+     * avoid the (slight) overhead of using a lambda.
      *
      * @tparam F The type of the function.
      * @tparam A The types of the arguments.
@@ -188,10 +237,10 @@ public:
      * @param args The arguments to pass to the function.
      */
     template <typename F, typename... A>
-    void push_task(const F &task, const A &...args)
+    void push_task(const F &task, void *paramPtr, const A &...args)
     {
-        push_task([task, args...]
-                  { task(args...); });
+        push_task([task, paramPtr, args...]
+                  { task( paramPtr, args...); });
     }
 
     /**
@@ -214,7 +263,8 @@ public:
     }
 
     /**
-     * @brief Submit a function with zero or more arguments and no return value into the task queue, and get an std::future<bool> that will be set to true upon completion of the task.
+     * @brief Submit a function with zero or more arguments and no return value into the task queue,
+     * and get an std::future<bool> that will be set to true upon completion of the task.
      *
      * @tparam F The type of the function.
      * @tparam A The types of the zero or more arguments to pass to the function.
@@ -249,14 +299,16 @@ public:
     }
 
     /**
-     * @brief Submit a function with zero or more arguments and a return value into the task queue, and get a future for its eventual returned value.
+     * @brief Submit a function with zero or more arguments and a return value into the task queue,
+     * and get a future for its eventual returned value.
      *
      * @tparam F The type of the function.
      * @tparam A The types of the zero or more arguments to pass to the function.
      * @tparam R The return type of the function.
      * @param task The function to submit.
      * @param args The zero or more arguments to pass to the function.
-     * @return A future to be used later to obtain the function's returned value, waiting for it to finish its execution if needed.
+     * @return A future to be used later to obtain the function's returned value, waiting for it to
+     * finish its execution if needed.
      */
     template <typename F, typename... A, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>, typename = std::enable_if_t<!std::is_void_v<R>>>
     std::future<R> submit(const F &task, const A &...args)
@@ -284,7 +336,11 @@ public:
     }
 
     /**
-     * @brief Wait for tasks to be completed. Normally, this function waits for all tasks, both those that are currently running in the threads and those that are still waiting in the queue. However, if the variable paused is set to true, this function only waits for the currently running tasks (otherwise it would wait forever). To wait for a specific task, use submit() instead, and call the wait() member function of the generated future.
+     * @brief Wait for tasks to be completed. Normally, this function waits for all tasks, both
+     * those that are currently running in the threads and those that are still waiting in the
+     * queue. However, if the variable paused is set to true, this function only waits for the
+     * currently running tasks (otherwise it would wait forever). To wait for a specific task, use
+     * submit() instead, and call the wait() member function of the generated future.
      */
     void wait_for_tasks()
     {
@@ -309,12 +365,17 @@ public:
     // ===========
 
     /**
-     * @brief An atomic variable indicating to the workers to pause. When set to true, the workers temporarily stop popping new tasks out of the queue, although any tasks already executed will keep running until they are done. Set to false again to resume popping tasks.
+     * @brief An atomic variable indicating to the workers to pause. When set to true, the workers
+     * temporarily stop popping new tasks out of the queue, although any tasks already executed will
+     * keep running until they are done. Set to false again to resume popping tasks.
      */
     std::atomic<bool> paused = false;
 
     /**
-     * @brief The duration, in microseconds, that the worker function should sleep for when it cannot find any tasks in the queue. If set to 0, then instead of sleeping, the worker function will execute std::this_thread::yield() if there are no tasks in the queue. The default value is 1000.
+     * @brief The duration, in microseconds, that the worker function should sleep for when it
+     * cannot find any tasks in the queue. If set to 0, then instead of sleeping, the worker
+     * function will execute std::this_thread::yield() if there are no tasks in the queue. The
+     * default value is 1000.
      */
     ui32 sleep_duration = 1000;
 
@@ -331,6 +392,7 @@ private:
         for (ui32 i = 0; i < thread_count; i++)
         {
             threads[i] = std::thread(&thread_pool::worker, this);
+            thread_params[threads[i].get_id()] = nullptr;
         }
     }
 
@@ -341,8 +403,11 @@ private:
     {
         for (ui32 i = 0; i < thread_count; i++)
         {
+            thread_params[threads[i].get_id()] = nullptr;
             threads[i].join();
         }
+
+        thread_params.clear();
     }
 
     /**
@@ -351,7 +416,7 @@ private:
      * @param task A reference to the task. Will be populated with a function if the queue is not empty.
      * @return true if a task was found, false if the queue is empty.
      */
-    bool pop_task(std::function<void()> &task)
+    bool pop_task(std::function<void( void *paramPtr )> &task)
     {
         const std::scoped_lock lock(queue_mutex);
         if (tasks.empty())
@@ -377,16 +442,17 @@ private:
     }
 
     /**
-     * @brief A worker function to be assigned to each thread in the pool. Continuously pops tasks out of the queue and executes them, as long as the atomic variable running is set to true.
+     * @brief A worker function to be assigned to each thread in the pool. Continuously pops tasks
+     * out of the queue and executes them, as long as the atomic variable running is set to true.
      */
     void worker()
     {
         while (running)
         {
-            std::function<void()> task;
+            std::function<void( void *paramPtr )> task;
             if (!paused && pop_task(task))
             {
-                task();
+                task( thread_params[std::this_thread::get_id()] );
                 tasks_total--;
             }
             else
@@ -406,14 +472,15 @@ private:
     mutable std::mutex queue_mutex = {};
 
     /**
-     * @brief An atomic variable indicating to the workers to keep running. When set to false, the workers permanently stop working.
+     * @brief An atomic variable indicating to the workers to keep running. When set to false, the
+     * workers permanently stop working.
      */
     std::atomic<bool> running = true;
 
     /**
      * @brief A queue of tasks to be executed by the threads.
      */
-    std::queue<std::function<void()>> tasks = {};
+    std::queue<std::function<void( void *paramPtr )>> tasks = {};
 
     /**
      * @brief The number of threads in the pool.
@@ -425,8 +492,11 @@ private:
      */
     std::unique_ptr<std::thread[]> threads;
 
+    std::map<std::thread::id, void *> thread_params;
+
     /**
-     * @brief An atomic variable to keep track of the total number of unfinished tasks - either still in the queue, or running in a thread.
+     * @brief An atomic variable to keep track of the total number of unfinished tasks - either
+     * still in the queue, or running in a thread.
      */
     std::atomic<ui32> tasks_total = 0;
 };
@@ -452,7 +522,9 @@ public:
         : out_stream(_out_stream){};
 
     /**
-     * @brief Print any number of items into the output stream. Ensures that no other threads print to this stream simultaneously, as long as they all exclusively use this synced_stream object to print.
+     * @brief Print any number of items into the output stream. Ensures that no other threads print
+     * to this stream simultaneously, as long as they all exclusively use this synced_stream object
+     * to print.
      *
      * @tparam T The types of the items
      * @param items The items to print.
